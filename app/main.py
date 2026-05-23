@@ -96,6 +96,16 @@ def main():
 
     elif command == "write-tree":
         print(write_tree("."))
+
+    elif command == "commit-tree" and sys.argv[3] == "-p" and sys.argv[5] == "-m":
+        content = f"tree {sys.argv[2]}\nparent {sys.argv[4]}\nauthor Inam <inam@gmail.com> 1690116359 +0000\ncommitter Inamul <inamul@gmail.com> 1630516359 +0000\n\n{sys.argv[6]}\n"
+        commit_object = f"commit {len(content)}\0{content}".encode("utf-8")
+        sha = hashlib.sha1(commit_object).hexdigest()
+        os.mkdir(f".git/objects/{sha[:2]}")
+        with open(f".git/objects/{sha[:2]}/{sha[2:]}", "wb") as f:
+            f.write(zlib.compress(commit_object))
+        print(sha)
+
     else:
         raise RuntimeError(f"Unknown command #{command}")
 
