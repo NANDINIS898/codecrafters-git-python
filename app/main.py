@@ -1,7 +1,32 @@
 import sys
 import os
-import zlib
-import hashlib
+import zlib, hashlib, pathlib
+
+from hashlib import sha1
+
+
+def read_raw_content(filename):
+    with open(filename, "rb") as f:
+        return f.read()
+
+
+def create_header(content):
+    count = len(content)
+    return f"blob {count}\0".encode()
+
+
+def compute_sha(header, content):
+    return sha1(header + content).hexdigest()
+
+
+def store_blob(sha, header, content):
+    dir_path = os.path.join(".git", "objects", sha[:2])
+    file_path = os.path.join(dir_path, sha[2:])
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+    compressed = zlib.compress(header + content)
+    with open(file_path, "wb") as f:
+        f.write(compressed)
 
 
 def read_binary_object(sha):
@@ -9,6 +34,29 @@ def read_binary_object(sha):
         data = zlib.decompress(f.read())
         header, content = data.split(b"\0", 1)
         return content
+
+
+def write_tree(dir):
+    entries = []
+    for entry in sorted(os.listdir(dir)):
+        full_path = os.path.join(dir, entry)
+        if entry == ".git":
+            continue
+        if os.path.isdir(full_path):
+            sha = write_tree(full_path)
+            mode = "40000"
+        else:
+            content = read_raw_content(full_path)
+            header = create_header(content)
+            sha = compute_sha(header, content)
+            store_blob(sha, header, content)
+            mode = "100644"
+        entries.append(f"{mode} {entry}\0".encode() + bytes.fromhex(sha))
+    tree_data = b"".join(entries)
+    tree_header = f"tree {len(tree_data)}\0".encode()
+    tree_sha1 = compute_sha(tree_header, tree_data)
+    store_blob(tree_sha1, tree_header, tree_data)
+    return tree_sha1
 
 
 def main():
@@ -20,24 +68,22 @@ def main():
         with open(".git/HEAD", "w") as f:
             f.write("ref: refs/heads/main\n")
         print("Initialized git directory")
-    elif command == "cat-file":
-        # We don't care about the options yet, but we need to extract them anyway
-        if sys.argv[2] == "-p":
-            hash = sys.argv[3]
-            content = read_binary_object(hash)
-            print(content.decode("utf-8"), end="")
-    elif command == "hash-object":
-        if sys.argv[2] == "-w":
-            file = sys.argv[3]
-            with open(file, "rb") as f:
-                data = f.read()
-                header = f"blob {len(data)}\0".encode("utf-8")
-                store = header + data
-                sha = hashlib.sha1(store).hexdigest()
-                os.makedirs(f".git/objects/{sha[:2]}", exist_ok=True)
-                with open(f".git/objects/{sha[:2]}/{sha[2:]}", "wb") as f:
-                    f.write(zlib.compress(store))
-                print(sha)
+    elif command == "cat-file" and sys.argv[2] == "-p":
+        filename = sys.argv[3]
+        with open(f".git/objects/{filename[:2]}/{filename[2:]}", "rb") as f:
+            blob = zlib.decompress(f.read()).split(b"\x00")[1]
+            print(blob.decode("utf-8"), end="")
+    elif command == "hash-object" and sys.argv[2] == "-w":
+        file_path = sys.argv[3]
+        contents = pathlib.Path(file_path).read_bytes()
+        header = f"blob {len(contents)}".encode()
+        object_contents = header + b"\0" + contents
+        object_id = hashlib.sha1(object_contents).hexdigest()
+        print(object_id)
+        object_file = pathlib.Path(".git/objects") / object_id[:2] / object_id[2:]
+        object_file.parent.mkdir(parents=True, exist_ok=True)
+        object_file.write_bytes(zlib.compress(object_contents))
+
     elif command == "ls-tree":
         param, hash = sys.argv[2], sys.argv[3]
         if param == "--name-only":
@@ -47,6 +93,9 @@ def main():
                 _, name = mode.split()
                 binary_data = binary_data[20:]
                 print(name.decode("utf-8"))
+
+    elif command == "write-tree":
+        print(write_tree("."))
     else:
         raise RuntimeError(f"Unknown command #{command}")
 
