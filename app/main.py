@@ -1,5 +1,6 @@
 import sys
 import os
+from zlib import compress
 
 
 def main():
@@ -15,7 +16,12 @@ def main():
         with open(".git/HEAD", "w") as f:
             f.write("ref: refs/heads/main\n")
             print("Initialized git directory")
-    else:
+    case ["cat-file", "-p", blob_sha]:
+    with open(f".git/objects/{blob_sha[:2]}/{blob_sha[2:]}", "rb") as f:
+        blob = decompress(f.read())
+        print(blob.split(b"\x00")[1].decode(), end="")
+        
+    case:
         raise RuntimeError(f"Unknown command #{command}")
 
 
