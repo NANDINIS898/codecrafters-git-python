@@ -1,7 +1,6 @@
-# Build Your Own Git — Python Implementation
+# Build Your Own Git: Python Implementation
 
 A simplified Git implementation built in Python as part of the CodeCrafters "Build Your Own Git" challenge.
-
 This project recreates core Git internals from scratch, including object storage, tree structures, commits, and repository cloning.
 
 ---
@@ -38,11 +37,4 @@ This project recreates core Git internals from scratch, including object storage
 - hashlib
 - File system operations
 
----
-
-## Example Commands
-
-### Initialize repository
-
-```bash
-./your_program.sh init
+----
